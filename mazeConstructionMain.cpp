@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <windows.h>
 #include <list>
+#include <queue>
 #include <stack>
 
 using namespace cv;
@@ -55,7 +56,7 @@ public:
 	//returns a list of x y cell (not pixel!) coordinates
 	//assumes that start and end are valid
 	//using iterative solution because rapsberry pi has less memory so a recursive solution may overflow stack
-	list<pair<size_t, size_t>> solveMaze(size_t startX, size_t startY, size_t endX, size_t endY)
+	list<pair<size_t, size_t>> dfsSolve(size_t startX, size_t startY, size_t endX, size_t endY)
 	{
 		vector<vector<bool>> visited;
 		stack<pair<size_t, size_t>> dfsPath;
@@ -128,6 +129,77 @@ public:
 
 		return solution;
 	}
+	//function assumes valid start and end positions, else will return garbage solution
+	list<pair<size_t, size_t>> solveMaze(pair<size_t, size_t> startPos, pair<size_t, size_t> endPos) //cell coordinates of starting and ending positions
+	{
+		queue<pair<size_t, size_t>> bfsQueue;
+		queue<list<pair<size_t, size_t>>> solutions;
+		
+		vector<vector<bool>> visited;
+		visited.resize(width);
+		for (size_t i = 0; i < width; i++) //initialize visited to false
+		{
+			visited[i].resize(height);
+			for (size_t j = 0; j < height; j++)
+				visited[i][j] = false;
+		}
+		list<pair<size_t, size_t>> currSol;
+		bfsQueue.push(startPos);
+		visited[startPos.first][startPos.second] = true;
+		while (!bfsQueue.empty())
+		{
+			pair<size_t, size_t> currXY = bfsQueue.front();
+			bfsQueue.pop();
+			if(!solutions.empty())
+			{
+				currSol = solutions.front();
+				solutions.pop();
+			}
+			list<pair<size_t, size_t>> newSol;
+			if (currXY.first == endPos.first && currXY.second == endPos.second)
+			{
+				currSol.push_back(currXY);
+				return currSol;
+			}
+			if ((currXY.second) - 1 >= 0 && getCell(currXY.first, currXY.second - 1).type != cell::cell_t::wall && !visited[currXY.first][currXY.second - 1]) //check for north cell
+			{
+				bfsQueue.push(pair<size_t, size_t>(currXY.first, currXY.second - 1));
+				newSol = currSol;
+				newSol.push_back(currXY);
+				newSol.push_back(pair<size_t, size_t>(currXY.first, currXY.second - 1));
+				solutions.push(newSol);
+				visited[currXY.first][currXY.second - 1] = true;
+			}
+			if ((currXY.first) + 1 <= width - 1 && getCell(currXY.first + 1, currXY.second).type != cell::cell_t::wall && !visited[currXY.first + 1][currXY.second]) //check for east cell
+			{
+				bfsQueue.push(pair<size_t, size_t>(currXY.first + 1, currXY.second));
+				newSol = currSol;
+				newSol.push_back(currXY);
+				newSol.push_back(pair<size_t, size_t>(currXY.first + 1, currXY.second));
+				solutions.push(newSol);
+				visited[currXY.first + 1][currXY.second] = true;
+			}
+			if ((currXY.second) + 1 <= height - 1 && getCell(currXY.first, currXY.second + 1).type != cell::cell_t::wall && !visited[currXY.first][currXY.second + 1]) //check for south cell
+			{
+				bfsQueue.push(pair<size_t, size_t>(currXY.first, currXY.second + 1));
+				newSol = currSol;
+				newSol.push_back(currXY);
+				newSol.push_back(pair<size_t, size_t>(currXY.first, currXY.second + 1));
+				solutions.push(newSol);
+				visited[currXY.first][currXY.second + 1] = true;
+			}
+			if ((currXY.first) - 1 >= 0 && getCell(currXY.first - 1, currXY.second).type != cell::cell_t::wall && !visited[currXY.first - 1][currXY.second]) //check for west cell
+			{
+				bfsQueue.push(pair<size_t, size_t>(currXY.first - 1, currXY.second));
+				newSol = currSol;
+				newSol.push_back(currXY);
+				newSol.push_back(pair<size_t, size_t>(currXY.first - 1, currXY.second));
+				solutions.push(newSol);
+				visited[currXY.first - 1][currXY.second] = true;
+			}
+		}
+		return currSol;
+	}
 private:
 	vector<vector<cell>> cells;
 	size_t width, height;
@@ -145,7 +217,7 @@ int main(int argc, char** argv)
 	while(1)
 	{
 		Mat frame;
-		//frame = imread("../x64/Debug/maze.png", 1);
+		frame = imread("../x64/Debug/maze.png", 1);
 		cap >> frame;
 
 		// Load frame image and convert it to gray
@@ -176,13 +248,13 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		//list<pair<size_t, size_t>> solution = m.solveMaze(3, 3, 3, 16);
-		/*if(solution.size() > 0)
-			for (auto it = solution.begin(); it != solution.end(); it++)
-			{
-				cout << it->first << ' ' << it->second << endl;
-				m.getCell(it->first, it->second).type = cell::cell_t::path;
-			}*/
+		//list<pair<size_t, size_t>> solution = m.solveMaze(pair<size_t, size_t>(3,3), pair<size_t, size_t>(9,25));
+		//if(solution.size() > 0)
+		//	for (auto it = solution.begin(); it != solution.end(); it++)
+		//	{
+		//		cout << it->first << ' ' << it->second << endl;
+		//		m.getCell(it->first, it->second).type = cell::cell_t::path;
+		//	}
 		for (size_t row = 0; row < m.getHeight(); row++)
 		{
 			for (size_t col = 0; col < m.getWidth(); col++)
@@ -196,7 +268,9 @@ int main(int argc, char** argv)
 			}
 			cout << endl;
 		}
-		
+
+		Sleep(100);
+
 	}
 
 	return 0;
