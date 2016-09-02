@@ -2,23 +2,18 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <fstream>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <windows.h>
-#include <list>
-#include <queue>
-#include <stack>
+#include "maze.h"
+
+#define THRESH	100
+#define MAX_THRESH	255
 
 using namespace cv;
 using namespace std;
 
-Mat src; Mat src_gray;
-int thresh = 100;
-int max_thresh = 255;
-RNG rng(12345);
-
-
-
+Mat src, src_gray;
 
 /** @function main */
 int main(int argc, char** argv)
@@ -30,14 +25,14 @@ int main(int argc, char** argv)
 	while(1)
 	{
 		Mat frame;
-		frame = imread("../x64/Debug/maze.png", 1);
+		//frame = imread("../x64/Debug/maze.png", 1);
 		cap >> frame;
 
 		// Load frame image and convert it to gray
 		cvtColor(frame, src_gray, CV_BGR2GRAY);
 		//detect edges
 		Mat canny;
-		Canny(src_gray, canny, thresh, thresh * 2, 3);
+		Canny(src_gray, canny, THRESH, THRESH * 2, 3);
 
 		//construct maze
 		size_t ballSize = 30;
@@ -61,29 +56,24 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		//list<pair<size_t, size_t>> solution = m.solveMaze(pair<size_t, size_t>(3,3), pair<size_t, size_t>(9,25));
-		//if(solution.size() > 0)
-		//	for (auto it = solution.begin(); it != solution.end(); it++)
-		//	{
-		//		cout << it->first << ' ' << it->second << endl;
-		//		m.getCell(it->first, it->second).type = cell::cell_t::path;
-		//	}
-		for (size_t row = 0; row < m.getHeight(); row++)
+
+		// Solve Maze
+		list<pair<size_t, size_t>> solution = m.solveMaze(pair<size_t, size_t>(3,3), pair<size_t, size_t>(9,25));
+
+		// Add solution path
+		if (solution.size() > 0)
 		{
-			for (size_t col = 0; col < m.getWidth(); col++)
+			for (auto it = solution.begin(); it != solution.end(); it++)
 			{
-				if (m.getCell(col, row).type == cell::cell_t::wall)
-					cout << 'X';
-				else if (m.getCell(col, row).type == cell::cell_t::path)
-					cout << 'O';
-				else
-					cout << ' ';
+				// cout << it->first << ' ' << it->second << endl;
+				m.getCell(it->first, it->second).type = cell::cell_t::path;
 			}
-			cout << endl;
 		}
 
-		Sleep(100);
+		m.drawMaze();
 
+		Sleep(100);
+		system("pause");
 	}
 
 	return 0;
