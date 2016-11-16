@@ -90,6 +90,17 @@ void Object::setYPos(int y){
 
 }
 
+double Object::getArea()
+{
+	return Object::area;
+}
+
+
+void Object::setArea(double area)
+{
+	Object::area = area;
+}
+
 Scalar Object::getHSVmin(){
 
 	return Object::HSVmin;
