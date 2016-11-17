@@ -387,10 +387,11 @@ class labyrinth
 private:
 	typedef enum
 	{
-		UP = 0x80,
-		DOWN = 0x40,
-		LEFT = 0x20,
-		RIGHT = 0x10
+		DEFAULT,
+		UP = 0x8,
+		DOWN = 0x4,
+		LEFT = 0x2,
+		RIGHT = 0x1
 	}dir_t;
 	Serial& serialConnection;
 public:
@@ -401,27 +402,49 @@ public:
 
 	bool moveBall(dir_t dir, uint8_t speed)
 	{
-		char control_packet[3] = { INIT_WORD, 0, END_WORD };
-		control_packet[1] = dir | speed;
-		return serialConnection.WriteData(control_packet, 3);
+		char control_packet[4] = { INIT_WORD, 0, 0, END_WORD };
+		control_packet[1] = (uint8_t)(dir);
+		control_packet[2] = speed;
+		return serialConnection.WriteData(control_packet, 4);
 	}
 	
 	bool moveUp(uint8_t speed)
 	{
-		return moveBall(UP, speed & 0x0F);
+		return moveBall(UP, speed);
 	}
 	bool moveDown(uint8_t speed)
 	{
-		return moveBall(DOWN, speed & 0x0F);
+		return moveBall(DOWN, speed);
 	}
 	bool moveLeft(uint8_t speed)
 	{
-		return moveBall(LEFT, speed & 0x0F);
+		return moveBall(LEFT, speed);
 	}
 	bool moveRight(uint8_t speed)
 	{
-		return moveBall(RIGHT, speed & 0x0F);
+		return moveBall(RIGHT, speed);
 	}
+	bool moveReset()
+	{
+		return moveBall(DEFAULT, 0x0);
+	}
+
+	bool turnNorthServo(int8_t angle)
+	{
+		char control_packet[4] = { INIT_WORD, 0, 0, END_WORD };
+		control_packet[1] = (uint8_t)(0xF0);
+		control_packet[2] = angle;
+		return serialConnection.WriteData(control_packet, 4);
+	}
+	bool turnWestServo(int8_t angle)
+	{
+		char control_packet[4] = { INIT_WORD, 0, 0, END_WORD };
+		control_packet[1] = (uint8_t)(0x0F);
+		control_packet[2] = angle;
+		return serialConnection.WriteData(control_packet, 4);
+	}
+
+
 	bool isConnected()
 	{
 		return serialConnection.IsConnected();
@@ -430,23 +453,18 @@ public:
 
 
 
-int kP = 0;
-int kI = 0;
-int kD = 0;
+int kPNorth = 0;
+int kINorth = 0;
+int kDNorth = 0;
 
-int kPMax = 30;
-int kIMax = 20;
-int kDMax = 20;
+int kPMax = 100;
+int kIMax = 100;
+int kDMax = 100;
 
-void on_trackbar(int, void*)
-{//This function gets called whenever a
- // trackbar position is changed
-
-}
-void createTrackbars() {
+void createTrackbarsNorth() {
 
 
-	char trackbarWindowName[50] = "PID Coefficient Picker";
+	char trackbarWindowName[50] = "PID Coefficient Picker North";
 	//create window for trackbars
 	namedWindow(trackbarWindowName, 0);
 	//create memory to store trackbar name on window
@@ -459,10 +477,37 @@ void createTrackbars() {
 	//the max value the trackbar can move (eg. H_HIGH),
 	//and the function that is called whenever the trackbar is moved(eg. on_trackbar)
 	//                                  ---->    ---->     ---->
-	createTrackbar("kP", trackbarWindowName, &kP, kPMax, NULL);
-	createTrackbar("kI", trackbarWindowName, &kI, kIMax, NULL);
-	createTrackbar("kD", trackbarWindowName, &kD, kDMax, NULL);
+	createTrackbar("kP", trackbarWindowName, &kPNorth, kPMax, NULL);
+	createTrackbar("kI", trackbarWindowName, &kINorth, kIMax, NULL);
+	createTrackbar("kD", trackbarWindowName, &kDNorth, kDMax, NULL);
 }
+
+
+int kPWest = 0;
+int kIWest = 0;
+int kDWest = 0;
+
+void createTrackbarsWest() {
+
+
+	char trackbarWindowName[50] = "PID Coefficient Picker West";
+	//create window for trackbars
+	namedWindow(trackbarWindowName, 0);
+	//create memory to store trackbar name on window
+	char TrackbarName[50];
+	sprintf(TrackbarName, "kP", kPMax);
+	sprintf(TrackbarName, "kI", kIMax);
+	sprintf(TrackbarName, "kD", kDMax);
+	//create trackbars and insert them into window
+	//3 parameters are: the address of the variable that is changing when the trackbar is moved(eg.H_LOW),
+	//the max value the trackbar can move (eg. H_HIGH),
+	//and the function that is called whenever the trackbar is moved(eg. on_trackbar)
+	//                                  ---->    ---->     ---->
+	createTrackbar("kP", trackbarWindowName, &kPWest, kPMax, NULL);
+	createTrackbar("kI", trackbarWindowName, &kIWest, kIMax, NULL);
+	createTrackbar("kD", trackbarWindowName, &kDWest, kDMax, NULL);
+}
+
 
 
 //
@@ -504,109 +549,93 @@ int main(int argc, char** argv)
 	currX = prevX;
 	currY = prevY;
 	
-	double prevError = 0;
-	double integral = 0;
-	double derivative;
-	double error;
-	double output;
-	int setpoint = 50;
-	begin_time = clock();
+	double prevErrorX = 0;
+	double integralX = 0;
+	double derivativeX;
+	double errorX;
+	double outputX;
+	int setpointX = 70;
 
-	createTrackbars();
+
+
+	double prevErrorY = 0;
+	double integralY = 0;
+	double derivativeY;
+	double errorY;
+	double outputY;
+	int setpointY = 35;
+
+
+
+	begin_time = clock();
+	createTrackbarsNorth();
+	createTrackbarsWest();
 	while (1)
 	{
-	//	
-	//	if (_kbhit())
-	//	{
-	//		switch (_getch())
-	//		{
-	//		case('w'):
-	//			l.moveRight(1);
-	//			break;
-	//		case('s'):
-	//			l.moveLeft(2);
-	//			break;
-	//		case('a'):
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			Sleep(100);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			l.moveLeft(10);
-	//			Sleep(170);
-	//			
-	//			l.moveRight(13);
-	//			Sleep(20);
-	//		
-	//		
-	//		
-	//			Sleep(30);
-	//			l.moveLeft(3);
-	//			l.moveRight(13);
-	//			Sleep(20);
-	//			l.moveLeft(3);
-	//			l.moveRight(13);
-	//			l.moveLeft(3);
-	//			l.moveRight(13);
-	//			Sleep(50);
-	//			l.moveLeft(3);
-	//			l.moveRight(13);
-	//			Sleep(20);
-	//			l.moveLeft(13);
-	//			break;
-	//		case('d'):
-	//			l.moveRight(1);
-	//			break;
-	//		default:
-	//			break;
 
-	//		}
-	//	}
-		//counter;
-		//array[counter] = error;
-		//best_data
-		//kd,kp
-		//addition
 
+		if (_kbhit())
+		{
+			switch (_getch())
+			{
+			case('w'):
+				l.turnWestServo(90);
+				break;
+			case('s'):
+				l.turnWestServo(-90);
+				break;
+			case('a'):
+				l.turnNorthServo(-90);
+				break;
+			case('d'):
+				l.turnNorthServo(90);
+				break;
+			default:
+				l.turnWestServo(0);
+				l.turnNorthServo(0);
+				break;
+			}
+		}
 
 		capture >> cameraFeed;
 		cameraFeed = cameraFeed(Rect(ROI_X, ROI_Y, ROI_WIDTH, ROI_HEIGHT));
-		trackObject(o, cameraFeed);
-		
-		currX = o.getXPos();
-		currY = o.getYPos();
-	
-		dt = float(clock() - begin_time) / CLOCKS_PER_SEC;
-		
-		error = setpoint - currX;
-		integral = integral + error*dt;
-		derivative = (error - prevError) / dt;
-		prevError = error;
-		output = ((double)kP/100*error) + ((double)kI/1000 * integral) + ((double)kD/1000 * derivative);
-		
-	
-		cout << output << endl;
-		if (abs(output) > .4 && abs(output) < 1)
-			output = 1;
+		if (trackObject(o, cameraFeed))
+		{
 
-		if (output < 0)
-			l.moveLeft((uint8_t)output);
+			currX = o.getXPos();
+			currY = o.getYPos();
+
+
+			///pid stuff
+			dt = float(clock() - begin_time) / CLOCKS_PER_SEC;
+
+			errorX = setpointX - currX;
+			integralX = integralX + errorX*dt;
+			derivativeX = (errorX - prevErrorX) / dt;
+			prevErrorX = errorX;
+			outputX = ((double)kPNorth / 100 * errorX) + ((double)kINorth / 10000 * integralX) + ((double)kPNorth / 100 * derivativeX);
+
+
+			errorY = setpointY - currY;
+			integralY = integralY + errorY*dt;
+			derivativeY = (errorY - prevErrorY) / dt;
+			prevErrorY = errorY;
+			outputY = ((double)kPWest / 100 * errorY) + ((double)kIWest / 10000 * integralY) + ((double)kDWest / 100 * derivativeY);
+
+
+
+
+			printf("outputX =\t%.2lf\t outputY =\t%.2lf\t\t\n", outputX, outputY);
+			waitKey(5);
+			l.turnNorthServo((int8_t)outputX);
+			l.turnWestServo((int8_t)-outputY);
+
+			//record starting time
+			begin_time = clock();
+
+		}
 		else
-			l.moveRight((uint8_t)output);
-		
-
-		waitKey(5);
-
-		Sleep(50);
-		//record starting time
-		begin_time = clock();
-	
-
+			cout << "NOT FOUND!" << endl;
 		//printf("X Speed =\t%.2lf\t Y Speed =\t%.2lf\t\t\n", speed.first, speed.second);
 
 	}
